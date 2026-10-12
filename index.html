@@ -1,74 +1,306 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dream">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>♪ dream.player</title>
+<title>dream.player</title>
+<meta name="description" content="Lecteur de musique pixel dreamcore : tes mp3 + Spotify">
 
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#07060d"
+<meta name="theme-color" content="#080710">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="dream.player">
 
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="premium.css">
+<link rel="preload" href="fonts/poppins-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="dream.css">
 </head>
-<body>
-<div class="cloud"></div><div class="cloud"></div><div class="cloud"></div>
+<body data-view="home">
 
-<main class="player">
-
-  <div class="tabs">
-    <button class="tab active" data-view="local">FICHIERS</button>
-    <button class="tab" data-view="spotify">SPOTIFY</button>
+<!-- Intro : démarrage « ancien ordinateur » -->
+<div id="boot" aria-hidden="true">
+  <div class="win hot">
+    <header class="wt"><h2>DREAM.OS</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+    <div class="wb">
+      <p>dream.player<br>démarrage...</p>
+      <div class="loader"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <small>chargement des rêves</small>
+    </div>
   </div>
+</div>
 
-  <!-- ===== VUE LOCALE ===== -->
-  <section class="view active" id="view-local">
-    <div class="screen">
-      <canvas id="viz" width="128" height="48"></canvas>
-      <div class="now" id="now"><span id="nowTitle">— aucune piste —</span></div>
-      <div class="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
-      <input type="range" id="seek" min="0" max="100" value="0" step="0.1" aria-label="Position">
+<!-- Décor dreamcore pixel (purement décoratif) -->
+<div class="bg" aria-hidden="true">
+  <div class="bg-sky"></div>
+  <div id="bgb"></div>
+  <img class="bg-moon" src="art/moon.svg" alt="">
+  <img class="bg-bmoon" src="art/blackmoon.svg" alt="">
+  <img class="bg-isle i1" src="art/island.svg" alt="">
+  <img class="bg-isle i2" src="art/island.svg" alt="">
+  <img class="bg-cloud c1" src="art/cloud.svg" alt="">
+  <img class="bg-cloud c2" src="art/cloud.svg" alt="">
+  <img class="bg-cloud c3" src="art/cloud.svg" alt="">
+  <div class="bg-hall"></div>
+  <img class="bg-cd" src="art/cd.svg" alt="">
+  <i class="bat b1"></i><i class="bat b2"></i>
+</div>
+
+<div class="app">
+
+  <!-- Navigation : barre latérale (PC) / barre du bas (mobile) -->
+  <nav id="nav" aria-label="Navigation principale">
+    <div class="brand"><img src="icon.svg" alt=""><b>dream<br>.player</b></div>
+    <button class="navb active" data-view="home" aria-current="page"><span data-ic="home"></span><span>Accueil</span></button>
+    <button class="navb" data-view="lib"><span data-ic="lib"></span><span>Bibliothèque</span></button>
+    <button class="navb" data-view="spotify"><span data-ic="spotify"></span><span>Spotify</span></button>
+    <button class="navb" data-view="fx" id="tabfx"><span data-ic="gear"></span><span>Paramètres</span></button>
+    <div class="side-foot"><span class="clkt"></span><small>~ le temps s'est<br>arrêté ici ~</small></div>
+  </nav>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="brand"><img src="icon.svg" alt=""><b>dream.player</b></div>
+      <span class="clkt"></span>
+    </header>
+
+    <!-- ===================== ACCUEIL ===================== -->
+    <section class="view active" id="view-home" aria-label="Accueil">
+      <div class="home-grid">
+        <section class="win hot" id="playerWin">
+          <header class="wt"><span data-ic="disc"></span><h2>NOW_PLAYING</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb screen">
+            <div class="cover-wrap">
+              <div class="cover-frame" id="coverFrame">
+                <img id="cover" class="cover" alt="Pochette" src="art/cover.svg" width="300" height="300">
+                <i class="spk k1"></i><i class="spk k2"></i>
+              </div>
+            </div>
+            <div class="now" id="now"><span id="nowTitle">— aucune piste —</span></div>
+            <div class="artist" id="nowArtist"></div>
+            <div id="lyr" role="button" tabindex="0"></div>
+            <div class="viz-box"><canvas id="viz" width="128" height="40" aria-label="Visualiseur audio (touche pour changer de style)"></canvas></div>
+            <div class="time"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+            <input type="range" id="seek" min="0" max="100" value="0" step="0.1" aria-label="Position">
+          </div>
+          <div class="wb">
+            <div class="controls">
+              <button class="btn" id="shuffle" aria-label="Aléatoire" aria-pressed="false" data-ic="shuffle"></button>
+              <button class="btn" id="prev" aria-label="Précédent" data-ic="prev"></button>
+              <button class="btn big" id="play" aria-label="Lecture / pause"></button>
+              <button class="btn" id="next" aria-label="Suivant" data-ic="next"></button>
+              <button class="btn" id="repeat" aria-label="Répéter" aria-pressed="false" data-ic="repeat"></button>
+            </div>
+            <div class="vol">
+              <button class="btn" id="mute" aria-label="Muet" title="Muet (M)"></button>
+              <input type="range" id="vol" min="0" max="1" step="0.01" value="0.7" aria-label="Volume">
+              <output class="volv" id="volv" for="vol">70</output>
+            </div>
+          </div>
+        </section>
+
+        <section class="win" id="queueWin" aria-label="File d'attente">
+          <header class="wt"><span data-ic="queue"></span><h2>FILE_D'ATTENTE</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <div class="list qlist" id="homeq"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===================== BIBLIOTHEQUE ===================== -->
+    <section class="view" id="view-lib" aria-label="Bibliothèque">
+      <section class="win">
+        <header class="wt"><span data-ic="lib"></span><h2>BIBLIOTHEQUE</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+        <div class="wb">
+          <label class="drop" id="drop">
+            <span data-ic="down2" class="dropic"></span>
+            <span>DEPOSE TES MP3 ICI</span>
+            <small>ou touche pour importer</small>
+            <input type="file" id="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac" multiple aria-label="Importer des fichiers audio">
+          </label>
+          <div class="chips" id="chips" role="group" aria-label="Filtres rapides">
+            <button class="chip" data-v="all"><span data-ic="lib"></span>Tout</button>
+            <button class="chip" data-v="fav"><span data-ic="heart"></span>Favoris</button>
+            <button class="chip" data-v="rec"><span data-ic="clock"></span>Historique</button>
+            <button class="chip" data-v="albums"><span data-ic="disc"></span>Albums</button>
+            <button class="chip" data-v="artists"><span data-ic="note"></span>Artistes</button>
+            <button class="chip" data-v="queue"><span data-ic="queue"></span>File</button>
+          </div>
+          <div class="tb">
+            <select id="vsel" aria-label="Vue"></select>
+            <select id="ssel" aria-label="Tri"><option value="add">Ordre d'ajout</option><option value="title">Titre A–Z</option><option value="artist">Artiste A–Z</option></select>
+          </div>
+          <div class="tools">
+            <button class="btn sm" id="plnew" data-ic="plus">Playlist</button>
+            <button class="btn sm" id="plren">Renommer</button>
+            <button class="btn sm" id="pldel" data-ic="trash">Suppr.</button>
+            <button class="btn sm" id="qclr" data-ic="close">Vider la file</button>
+            <button class="btn sm" id="gridb" data-ic="grid"><span id="gridt">Grille</span></button>
+            <button class="btn sm" id="lrcb" data-ic="note">Paroles</button>
+            <input type="file" id="lrcf" accept=".lrc,.txt" hidden>
+          </div>
+          <div class="srch">
+            <input id="q" type="text" placeholder="Rechercher…" autocomplete="off" aria-label="Rechercher">
+            <button class="btn" id="favf" aria-label="Favoris seulement" aria-pressed="false" data-ic="heart"></button>
+          </div>
+          <div class="list" id="list" role="list"></div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ===================== SPOTIFY ===================== -->
+    <section class="view" id="view-spotify" aria-label="Spotify">
+      <div class="stack">
+        <section class="win hot" id="spx">
+          <header class="wt"><span data-ic="spotify"></span><h2>SPOTIFY_PREMIUM</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb" id="spx-login">
+            <p class="hint"><b>Lecture complète (Premium).</b> Crée une app sur developer.spotify.com/dashboard, ajoute cette adresse en « Redirect URI », coche « Web Playback SDK », puis colle ton Client ID :</p>
+            <input type="text" id="spred" class="field" readonly aria-label="Adresse de redirection">
+            <div class="row"><input type="text" id="spcid" placeholder="Client ID" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Client ID Spotify"><button class="btn" id="splog">Go</button></div>
+          </div>
+          <div class="wb" id="spx-main" style="display:none">
+            <img id="spcover" alt="Pochette Spotify" src="art/cover.svg">
+            <div class="now"><span id="sptitle">— rien en lecture —</span></div>
+            <div class="time"><span id="spcur">0:00</span><span id="spdur">0:00</span></div>
+            <input type="range" id="spseek" min="0" max="100" step="0.1" value="0" aria-label="Position">
+            <div class="controls">
+              <button class="btn" id="spshuf" aria-label="Aléatoire" aria-pressed="false" data-ic="shuffle"></button>
+              <button class="btn" id="spprev" aria-label="Précédent" data-ic="prev"></button>
+              <button class="btn big" id="spplay" aria-label="Lecture / pause"></button>
+              <button class="btn" id="spnext" aria-label="Suivant" data-ic="next"></button>
+            </div>
+            <div class="vol"><span data-ic="vol" class="volic" style="width:24px;height:24px;display:block"></span><input type="range" id="spvol" min="0" max="1" step="0.01" value="0.7" aria-label="Volume Spotify"></div>
+            <div class="row"><input type="text" id="splink" placeholder="Lien d'une playlist, d'un album…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lien Spotify"><button class="btn" id="spgo">OK</button></div>
+            <div id="spq" class="list"></div>
+          </div>
+          <div class="wb"><p class="hint" id="spst" role="status"></p></div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="note"></span><h2>EXTRAITS_30S</h2><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <p class="hint">Colle un lien Spotify (playlist, album, titre, artiste ou podcast). Connecte-toi dans le lecteur pour écouter les titres en entier ; sinon tu auras des extraits de 30 s.</p>
+            <div class="row"><input type="text" id="spUrl" placeholder="https://open.spotify.com/playlist/..." autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Lien Spotify"><button class="btn" id="spGo">OK</button></div>
+            <div class="presets" id="presets"></div>
+            <div class="spwrap"><div class="loader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <iframe class="spotify-frame" id="spFrame" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" src="" title="Spotify"></iframe></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===================== PARAMÈTRES ===================== -->
+    <section class="view fx" id="view-fx" aria-label="Paramètres">
+      <div class="stack">
+
+        <section class="win">
+          <header class="wt"><span data-ic="disc"></span><h3>AMBIANCE</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <div class="presets">
+              <button class="btn sm" data-p="0">Normal</button><button class="btn sm" data-p="1">Slowed</button><button class="btn sm" data-p="2">Sped up</button><button class="btn sm" data-p="3">Bass</button><button class="btn sm" data-p="4">Vocal</button>
+            </div>
+            <label class="row"><b>Vitesse</b><input type="range" id="sp" min=".5" max="1.5" step=".01"><i id="spv"></i></label>
+            <label class="row"><b>Réverb</b><input type="range" id="rv" min="0" max="1" step=".01"><i id="rvv"></i></label>
+            <label class="row"><b>Hauteur fixe</b><input type="checkbox" id="kp"></label>
+            <div class="sub">ÉGALISEUR</div>
+            <label class="row"><b>Graves</b><input type="range" id="lo" min="-12" max="12" step="1"><i id="lov"></i></label>
+            <label class="row"><b>Médiums</b><input type="range" id="mi" min="-12" max="12" step="1"><i id="miv"></i></label>
+            <label class="row"><b>Aigus</b><input type="range" id="hi" min="-12" max="12" step="1"><i id="hiv"></i></label>
+          </div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="play"></span><h3>LECTURE</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <label class="row"><b>Fondu</b><select id="fade"><option value="0">Aucun</option><option value="2">2 s</option><option value="4">4 s</option><option value="6">6 s</option></select></label>
+            <label class="row"><b>Aléatoire</b><input type="checkbox" id="dsh"></label>
+            <label class="row"><b>Répétition</b><select id="drp"><option value="0">Non</option><option value="1">Tout</option><option value="2">Une piste</option></select></label>
+            <label class="row"><b>Volume départ</b><select id="sv"><option value="last">Dernier utilisé</option><option value="0.3">30 %</option><option value="0.5">50 %</option><option value="0.7">70 %</option><option value="1">100 %</option></select></label>
+            <p class="hint">Aléatoire et répétition s'appliquent à l'ouverture de l'appli.</p>
+            <div class="sub">MINUTEUR DE SOMMEIL</div>
+            <div class="presets"><button class="btn sm" data-s="15">15 min</button><button class="btn sm" data-s="30">30 min</button><button class="btn sm" data-s="60">60 min</button><button class="btn sm" data-s="0">Off</button></div>
+            <p class="hint" id="slst" role="status">Minuteur : off</p>
+          </div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="sparkle"></span><h3>VISUALISEUR</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <label class="row"><b>Style</b><select id="vs"><option value="0">Barres</option><option value="1">Miroir</option><option value="2">Cercle</option><option value="3">Onde</option></select></label>
+            <label class="row"><b>Sensibilité</b><input type="range" id="sens" min=".5" max="2" step=".1"><i id="sensv"></i></label>
+            <label class="row"><b>Basses / pochette</b><input type="checkbox" id="bass"></label>
+            <label class="row"><b>Pochettes pixel</b><input type="checkbox" id="pxcov"></label>
+            <label class="row"><b>CD qui tourne</b><input type="checkbox" id="spin"></label>
+            <label class="row"><b>Effet 3D (souris)</b><input type="checkbox" id="tilt"></label>
+            <p class="hint">Touche le visualiseur pour changer de style.</p>
+          </div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="moon"></span><h3>APPARENCE</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <div class="sub">THÈME</div>
+            <div class="presets"><button class="btn sm" data-t="dream">Dream</button><button class="btn sm" data-t="vapor">Vapor</button><button class="btn sm" data-t="ember">Ember</button><button class="btn sm" data-t="matrix">Matrix</button></div>
+            <label class="row"><b>Mode</b><select id="mode"><option value="">Normal</option><option value="vhs">VHS</option><option value="mono">Monochrome</option><option value="lim">Liminal</option><option value="y2k">Y2K</option></select></label>
+            <label class="row"><b>Intensité</b><input type="range" id="fxi" min="0" max="1" step=".05"><i id="fxiv"></i></label>
+            <label class="row"><b>Scanlines CRT</b><input type="checkbox" id="scan"></label>
+            <label class="row"><b>Animations</b><input type="checkbox" id="anim"></label>
+            <label class="row"><b>Accent</b><input type="color" id="acc" value="#ff6ec7"><button class="btn sm" id="accr">Auto</button></label>
+            <label class="row"><b>Taille texte</b><input type="range" id="zm" min=".85" max="1.3" step=".05"><i id="zmv"></i></label>
+          </div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="folder"></span><h3>DONNEES</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <label class="row"><b>Notifications</b><input type="checkbox" id="notif"></label>
+            <div class="presets">
+              <button class="btn sm" id="dexp" data-ic="up2">Exporter</button><button class="btn sm" id="dimp" data-ic="down2">Importer</button><button class="btn sm warn" id="dclr" data-ic="trash">Tout effacer</button>
+            </div>
+            <p class="hint">Tout reste sur cet appareil : tes fichiers sont dans le navigateur, tes réglages en local. Rien n'est envoyé sur un serveur (sauf Spotify si tu l'utilises). L'export contient playlists, favoris et réglages, pas les fichiers audio.</p>
+            <input type="file" id="dfile" accept=".json" hidden>
+          </div>
+        </section>
+
+        <section class="win">
+          <header class="wt"><span data-ic="gear"></span><h3>SYSTEME</h3><span class="wt-btns"><i></i><i></i><i></i></span></header>
+          <div class="wb">
+            <div class="presets">
+              <button class="btn sm" id="fs">Plein écran</button><button class="btn sm warn" id="rst">Réinitialiser les réglages</button><button class="btn sm" id="dg" data-ic="search">Vérifier</button>
+            </div>
+            <p class="hint">En cas de bug : touche « Vérifier », puis « Copier », et envoie le texte.</p>
+            <div class="kbd" aria-label="Raccourcis clavier">
+              <span><kbd>Espace</kbd>lecture</span><span><kbd>←</kbd><kbd>→</kbd>±5 s</span><span><kbd>↑</kbd><kbd>↓</kbd>volume</span>
+              <span><kbd>N</kbd><kbd>P</kbd>suivant / précédent</span><span><kbd>M</kbd>muet</span><span><kbd>S</kbd>aléatoire</span><span><kbd>R</kbd>répéter</span><span><kbd>F</kbd>favori</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- Mini-lecteur persistant (visible hors de l'accueil) -->
+  <div id="mini" role="region" aria-label="Mini-lecteur">
+    <img id="miniCover" src="art/cover.svg" alt="">
+    <button class="mini-info" id="miniOpen" aria-label="Ouvrir le lecteur"><b id="miniTitle">—</b><small id="miniArtist"></small></button>
+    <div class="mini-ctl">
+      <button class="btn" id="miniPrev" aria-label="Précédent" data-ic="prev"></button>
+      <button class="btn pp" id="miniPlay" aria-label="Lecture / pause"></button>
+      <button class="btn" id="miniNext" aria-label="Suivant" data-ic="next"></button>
     </div>
+    <div class="mini-bar" aria-hidden="true"><i id="miniFill"></i></div>
+  </div>
+</div>
 
-    <div class="controls">
-      <button class="btn" id="shuffle" aria-label="Aléatoire"></button>
-      <button class="btn" id="prev" aria-label="Précédent"></button>
-      <button class="btn big" id="play" aria-label="Lecture / pause"></button>
-      <button class="btn" id="next" aria-label="Suivant"></button>
-      <button class="btn" id="repeat" aria-label="Répéter"></button>
-    </div>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;background:#080710;color:#F2DDFB;font:16px monospace;text-align:center;padding:20px">dream.player a besoin de JavaScript pour fonctionner.</p></noscript>
 
-    <div class="vol"><span>VOL</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.7" aria-label="Volume"></div>
-
-    <label class="drop" id="drop">
-      <span>▼ DÉPOSE TES MP3 ICI ▼</span>
-      <small>ou touche pour importer</small>
-      <input type="file" id="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple>
-    </label>
-
-    <div class="list" id="list"><div class="empty">Playlist vide...</div></div>
-  </section>
-
-  <!-- ===== VUE SPOTIFY ===== -->
-  <section class="view" id="view-spotify">
-    <p class="hint">Colle un lien Spotify (playlist, album, titre, artiste ou podcast). Connecte-toi dans le lecteur pour écouter les titres en entier ; sinon tu auras des extraits de 30 s.</p>
-    <div class="row">
-      <input type="text" id="spUrl" placeholder="https://open.spotify.com/playlist/..." autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button class="btn" id="spGo">OK</button>
-    </div>
-    <div class="presets" id="presets"></div>
-    <iframe class="spotify-frame" id="spFrame" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" src="" title="Spotify"></iframe>
-  </section>
-
-  <div class="footer">~ le temps s'est arrêté ici ~</div>
-</main>
-
+<script src="diag.js"></script>
+<script src="icons.js"></script>
 <script src="script.js"></script>
 <script src="features.js"></script>
 <script src="premium.js"></script>
@@ -76,7 +308,6 @@
 <script src="more.js"></script>
 <script src="final.js"></script>
 <script src="settings.js"></script>
-<script src="layout.js"></script>
-<script src="diag.js"></script></body>
 <script src="polish.js"></script>
+</body>
 </html>

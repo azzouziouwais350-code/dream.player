@@ -1,28 +1,14 @@
-/* final.js — dream.player : aléatoire intelligent, glisser-déposer, préchargement, intro (APRÈS more.js) */
+/* final.js — dream.player : intro, horloge, aléatoire intelligent, préchargement, glisser-déposer des playlists (après more.js) */
 (() => {
 const $ = s => document.querySelector(s);
 const LS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 
-/* ---------- CSS ---------- */
-const css = document.createElement('style');
-css.textContent = `
-#splash{position:fixed;inset:0;z-index:300;background:#07060d;display:grid;place-items:center;animation:spl 1.7s ease forwards}
-#splash div{font:600 20px 'Inter',sans-serif;letter-spacing:.35em;color:#fff;text-shadow:0 0 30px var(--accent)}
-@keyframes spl{0%,65%{opacity:1}100%{opacity:0}}
-.player{animation:rise .9s .25s cubic-bezier(.2,.8,.2,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.98)}}
-.now.tin{animation:tin .6s ease both}
-@keyframes tin{from{opacity:0;transform:translateY(8px)}}
-#clk{display:flex;justify-content:space-between;font:600 10px 'Inter',sans-serif;letter-spacing:.2em;color:var(--mut);margin:0 6px 10px}
-.dh{padding:0 8px;font-size:20px;opacity:.6;cursor:grab;touch-action:none}
-.track.drag{position:relative;z-index:2;background:rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.5)}`;
-document.head.appendChild(css);
-
-/* ---------- Intro animée + horloge ---------- */
-document.body.insertAdjacentHTML('afterbegin', '<div id="splash"><div>dream.player</div></div>');
-setTimeout(() => { const s = $('#splash'); if (s) s.remove(); }, 1800);
-$('.tabs').insertAdjacentHTML('beforebegin', '<div id="clk"><span>DREAM.PLAYER</span><span id="clkt"></span></div>');
-const tick = () => { $('#clkt').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+/* ---------- Intro (retirée à la fin de son animation) + horloge ---------- */
+setTimeout(() => { const s = $('#boot'); if (s) s.remove(); }, 2100);
+const tick = () => {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.querySelectorAll('.clkt').forEach(e => { e.textContent = t; });
+};
 tick(); setInterval(tick, 20000);
 
 /* ---------- Préchargement + animation du titre ---------- */
@@ -40,7 +26,7 @@ load = (i, a) => {
   if (!shuffle && nx && nx.url) PRE.src = nx.url;
 };
 
-/* ---------- Aléatoire intelligent ---------- */
+/* ---------- Aléatoire intelligent (évite les répétitions, favorise favoris et morceaux peu écoutés) ---------- */
 function pick() {
   const H = LS('dp_hist', {}), avoid = new Set(RH.slice(-Math.min(10, tracks.length - 1)));
   let tot = 0;
@@ -68,19 +54,20 @@ next = a => {
   _nx(a);
 };
 
-/* ---------- Glisser-déposer dans les playlists ---------- */
+/* ---------- Liste : synchro des filtres/accueil + glisser-déposer dans les playlists ---------- */
 const _rl = renderList;
 renderList = () => {
   _rl();
+  window.DP.sync();
   const v = $('#vsel').value;
-  if (!v.startsWith('pl:') || !window.DP || $('#q').value || $('#favf').classList.contains('on')) return;
+  if (!v.startsWith('pl:') || $('#q').value || $('#favf').classList.contains('on') || $('#list').classList.contains('gridv')) return;
   const l = $('#list'), arr = window.DP.PL()[v.slice(3)];
   if (!arr) return;
   const ids = arr.filter(id => tracks.some(t => t.id === id));
   [...l.querySelectorAll('.track')].forEach((r, k) => {
     if (k >= ids.length) return;
     const h = document.createElement('span');
-    h.className = 'dh'; h.textContent = '≡';
+    h.className = 'dh'; h.setAttribute('aria-hidden', 'true'); h.innerHTML = icon('grip');
     h.onclick = e => e.stopPropagation();
     h.onpointerdown = e => {
       e.preventDefault(); e.stopPropagation();
@@ -106,5 +93,4 @@ renderList = () => {
     r.appendChild(h);
   });
 };
-renderList();
 })();
