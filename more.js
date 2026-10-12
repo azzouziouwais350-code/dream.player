@@ -1,36 +1,11 @@
-/* more.js — dream.player : albums, artistes, grille, paroles, listes auto (à charger APRÈS extras.js) */
+/* more.js — dream.player : albums, artistes, grille, paroles, listes automatiques (après extras.js) */
 (() => {
 const $ = s => document.querySelector(s);
 const LS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-let GQ = [], grp = null, GM = LS('dp_grid', false), LY = [], LP = '';
-const PH = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><rect width='10' height='10' fill='#2a2150'/><circle cx='5' cy='5' r='2' fill='#b79cff'/></svg>");
-
-/* ---------- CSS ---------- */
-const css = document.createElement('style');
-css.textContent = `
-#lyr{order:1;text-align:center;font:500 13px 'Inter',sans-serif;color:var(--accent);min-height:18px;margin:2px 0 4px;cursor:pointer}
-#list.gridv{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;padding:10px;max-height:360px}
-#list.gridv .track{flex-direction:column;align-items:stretch;gap:6px;border:1px solid var(--line);border-radius:14px;padding:8px}
-#list.gridv .track .n{display:none}
-#list.gridv .track img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}
-#list.gridv .track .t{white-space:normal;font-size:12px}
-#list.gridv .track small{font-size:11px;color:var(--mut)}
-.ghead{display:flex;gap:12px;align-items:center;padding:12px}
-.ghead img{width:72px;height:72px;border-radius:12px;object-fit:cover}
-.ghead b{display:block;font:600 16px 'Inter',sans-serif}
-.ghead small{color:var(--mut);font-size:12px}
-.gbar{display:flex;gap:8px;padding:0 12px 10px;flex-wrap:wrap}
-.gbar button{background:rgba(255,255,255,.1);border:0;color:#fff;border-radius:10px;padding:9px 12px;font:600 12px 'Inter',sans-serif}
-.sh pre{white-space:pre-wrap;font:15px/1.6 'Inter',sans-serif;color:#fff;margin:0 6px}`;
-document.head.appendChild(css);
-
-let tt;
-const say = m => {
-  let e = $('#toast');
-  if (!e) { e = document.createElement('div'); e.id = 'toast'; document.body.appendChild(e); }
-  e.textContent = m; e.classList.add('on');
-  clearTimeout(tt); tt = setTimeout(() => e.classList.remove('on'), 2400);
-};
+const say = (m, err) => window.DP.toast(m, err);
+let GQ = [], grp = null, GM = LS('dp_grid', false), LY = [], LP = '', lastView = '';
+const PH = 'art/cover.svg';
+window.DP.GQ = () => GQ;            // lu par l'accueil (liste « à suivre »)
 
 /* ---------- Album + année (tags ID3) ---------- */
 async function meta(f) {
@@ -77,20 +52,6 @@ next = a => {
 $('#list').addEventListener('click', () => { if (!/^(albums|artists|top|never)$/.test($('#vsel').value)) GQ = []; }, true);
 
 /* ---------- Vues Albums / Artistes / listes auto ---------- */
-const addOpts = () => {
-  const s = $('#vsel');
-  if ([...s.options].some(o => o.value === 'albums')) return;
-  const cur = s.value;
-  [['albums', 'Albums'], ['artists', 'Artistes'], ['top', 'Les plus écoutées'], ['never', 'Jamais écoutées']].forEach(([v, t]) => s.add(new Option(t, v)));
-  s.value = cur;
-};
-new MutationObserver(addOpts).observe($('#vsel'), { childList: true });
-addOpts();
-$('#vsel').onchange = () => {
-  grp = null;
-  $('#plren').style.display = $('#pldel').style.display = $('#vsel').value.startsWith('pl:') ? '' : 'none';
-  renderList();
-};
 const groups = v => {
   const m = new Map();
   tracks.forEach(t => {
@@ -121,11 +82,12 @@ function thumbs(l) {
 const _rl = renderList;
 renderList = () => {
   const l = $('#list'), v = $('#vsel').value, special = /^(albums|artists|top|never)$/.test(v);
+  if (v !== lastView) { grp = null; lastView = v; }       // on change de vue : retour à la liste des groupes
   enrich();
   l.classList.toggle('gridv', special ? (v === 'albums' || v === 'artists') && !grp : GM);
-  if (!special) { _rl(); if (GM) thumbs(l); return; }
+  if (!special) { _rl(); if (GM && l.classList.contains('gridv')) thumbs(l); return; }
   l.innerHTML = '';
-  const empty = () => { l.innerHTML = '<div class="empty">Rien ici pour le moment</div>'; };
+  const empty = () => { l.innerHTML = emptyBox('Rien ici pour le moment.'); };
   if (v === 'top' || v === 'never') {
     const H = LS('dp_hist', {});
     const list = v === 'top' ? tracks.filter(t => H[t.id]).sort((a, b) => H[b.id].n - H[a.id].n) : tracks.filter(t => !H[t.id]);
@@ -165,14 +127,12 @@ renderList = () => {
   simpleRows(list, l);
 };
 
-/* ---------- Grille + paroles : boutons ---------- */
-$('#qclr').insertAdjacentHTML('afterend', '<button class="btn" id="gridb"></button><button class="btn" id="lrcb">PAROLES</button><input type="file" id="lrcf" accept=".lrc,.txt" hidden>');
-const gb = () => { $('#gridb').textContent = GM ? 'LISTE' : 'GRILLE'; };
+/* ---------- Grille / liste ---------- */
+const gb = () => { $('#gridt').textContent = GM ? 'Liste' : 'Grille'; $('#gridb').setAttribute('aria-pressed', GM); };
 $('#gridb').onclick = () => { GM = !GM; try { localStorage.setItem('dp_grid', JSON.stringify(GM)); } catch {} gb(); renderList(); };
 gb();
 
 /* ---------- Paroles (.lrc ou texte) ---------- */
-$('#now').insertAdjacentHTML('afterend', '<div id="lyr"></div>');
 const parseL = s => {
   const out = []; let any = false;
   s.split(/\r?\n/).forEach(ln => {
@@ -190,7 +150,7 @@ function setLy(t) {
   if (!raw) return;
   LY = parseL(raw);
   LP = LY.length ? LY.map(x => x.s).join('\n') : raw;
-  if (!LY.length) $('#lyr').textContent = '♪ paroles (touche pour lire)';
+  if (!LY.length) $('#lyr').textContent = 'paroles (touche pour lire)';
 }
 audio.addEventListener('timeupdate', () => {
   if (!LY.length) return;
@@ -205,20 +165,22 @@ $('#lrcf').onchange = async e => {
   const f = e.target.files[0];
   if (f && tracks[idx]) {
     try { localStorage.setItem('dp_lrc_' + tracks[idx].id, await f.text()); setLy(tracks[idx]); say('Paroles ajoutées'); }
-    catch { say('Impossible de lire ce fichier'); }
+    catch { say('Impossible de lire ce fichier', true); }
   }
   e.target.value = '';
 };
-$('#lyr').onclick = () => {
+const openLy = () => {
   if (!LP) return;
   const o = document.createElement('div');
   o.className = 'sheet';
+  o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true');
   o.innerHTML = '<div class="sh"><h4></h4><pre></pre></div>';
   o.querySelector('h4').textContent = tracks[idx] ? tracks[idx].name : '';
   o.querySelector('pre').textContent = LP;
   o.onclick = e => { if (e.target === o) o.remove(); };
+  o.addEventListener('keydown', e => { if (e.key === 'Escape') o.remove(); });
   document.body.appendChild(o);
 };
-
-renderList();
+$('#lyr').onclick = openLy;
+$('#lyr').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLy(); } });
 })();

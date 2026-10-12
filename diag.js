@@ -8,8 +8,8 @@ const note = m => {
   if (Date.now() - last < 3000) return;
   last = Date.now();
   const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:#7a1f33;color:#fff;padding:10px 14px;border-radius:12px;font:12px/1.4 monospace;max-width:90vw;word-break:break-word';
-  d.textContent = m;
+  d.className = 'err-toast'; d.setAttribute('role', 'alert');
+  d.textContent = 'ERREUR · ' + m;
   (document.body || document.documentElement).appendChild(d);
   setTimeout(() => d.remove(), 5000);
 };
@@ -18,8 +18,8 @@ addEventListener('unhandledrejection', e => note('Promesse : ' + ((e.reason && e
 
 function show(txt) {
   const o = document.createElement('div');
-  o.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.7);display:grid;place-items:center;padding:16px';
-  o.innerHTML = '<div style="background:#15111f;color:#fff;border-radius:18px;padding:16px;max-width:560px;width:100%;max-height:80vh;overflow:auto;font:13px/1.5 monospace"><pre style="white-space:pre-wrap;word-break:break-word;margin:0 0 12px"></pre><button id="dgc" style="padding:10px 14px;border-radius:10px;border:0;background:#b79cff;font-weight:600">COPIER</button> <button id="dgx" style="padding:10px 14px;border-radius:10px;border:0;background:#333;color:#fff">FERMER</button></div>';
+  o.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(8,7,16,.8);display:grid;place-items:center;padding:16px';
+  o.innerHTML = '<div style="background:#171322;color:#F2DDFB;box-shadow:0 0 0 3px #6a52b8;padding:16px;max-width:560px;width:100%;max-height:80vh;overflow:auto;font:13px/1.5 monospace"><pre style="white-space:pre-wrap;word-break:break-word;margin:0 0 12px"></pre><button id="dgc" style="padding:12px 16px;border:0;background:#FF6EC7;color:#080710;font:600 13px Poppins,sans-serif;min-height:44px">COPIER</button> <button id="dgx" style="padding:12px 16px;border:0;background:#2e2450;color:#F2DDFB;font:600 13px Poppins,sans-serif;min-height:44px">FERMER</button></div>';
   o.querySelector('pre').textContent = txt;
   o.querySelector('#dgx').onclick = () => o.remove();
   o.querySelector('#dgc').onclick = () => {
@@ -30,7 +30,7 @@ function show(txt) {
 
 async function report() {
   const mods = { 'script.js': '#play', 'features.js': '#tabfx', 'spotify.js': '#spx', 'premium.js': '#bgb',
-    'extras.js': '#vsel', 'more.js': '#gridb', 'final.js': '#clk', 'settings.js': '#zm', 'layout.js': '.colL' };
+    'extras.js': '#vsel', 'more.js': '#gridb', 'final.js': '#clk', 'settings.js': '#zm', 'polish.js': '#spin' };
   const L = Object.entries(mods).map(([f, s]) => (document.querySelector(s) ? 'OK     ' : 'MANQUE ') + f);
   let sw = 'non supporté', ck = 'non supporté';
   try { if (navigator.serviceWorker) sw = (await navigator.serviceWorker.getRegistrations()).length; } catch {}
@@ -44,10 +44,5 @@ async function report() {
   show(L.join('\n'));
 }
 
-addEventListener('load', () => {
-  const fx = document.getElementById('view-fx');
-  if (!fx) return;
-  fx.insertAdjacentHTML('beforeend', '<h3>DIAGNOSTIC</h3><div class="presets"><button class="btn" id="dg">VÉRIFIER</button></div><p class="hint">En cas de bug : touche VÉRIFIER, puis COPIER, et envoie le texte.</p>');
-  document.getElementById('dg').onclick = report;
-});
+addEventListener('load', () => { const b = document.getElementById('dg'); if (b) b.onclick = report; });
 })();

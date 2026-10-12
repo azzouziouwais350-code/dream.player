@@ -1,4 +1,4 @@
-/* settings.js — dream.player : texte, visualiseur, file d'attente, fondu, démarrage (APRÈS final.js) */
+/* settings.js — dream.player : visualiseur pixel, fondu, confort, démarrage (après final.js) */
 (() => {
 const $ = s => document.querySelector(s);
 const LS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
@@ -7,28 +7,7 @@ const root = document.documentElement.style;
 const ST = Object.assign({ zm: 1, vs: 0, sens: 1, bass: true, fade: 0, sh: false, rp: 0 }, LS('dp_set2', {}));
 const fp = e => e.style.setProperty('--p', ((e.value - e.min) / (e.max - e.min) * 100) + '%');
 
-/* ---------- CSS ---------- */
-const css = document.createElement('style');
-css.textContent = `
-.player{zoom:var(--zm,1)}
-body.playing.bz #cover{transform:scale(calc(1 + var(--bass,0)*.05));transition:transform .1s linear}
-.track .m{cursor:pointer}`;
-document.head.appendChild(css);
-
-/* ---------- Réglages ---------- */
-$('#view-fx').insertAdjacentHTML('beforeend', `
-<h3>CONFORT</h3>
-<label><b>Taille texte</b><input type="range" id="zm" min=".85" max="1.3" step=".05"><i id="zmv"></i></label>
-<h3>VISUALISEUR</h3>
-<label><b>Style</b><select id="vs"><option value="0">Barres</option><option value="1">Miroir</option><option value="2">Cercle</option><option value="3">Onde</option></select></label>
-<label><b>Sensibilité</b><input type="range" id="sens" min=".5" max="2" step=".1"><i id="sensv"></i></label>
-<label><b>Basses / pochette</b><input type="checkbox" id="bass"></label>
-<h3>LECTURE</h3>
-<label><b>Fondu</b><select id="fade"><option value="0">Aucun</option><option value="2">2 s</option><option value="4">4 s</option><option value="6">6 s</option></select></label>
-<label><b>Aléatoire</b><input type="checkbox" id="dsh"></label>
-<label><b>Répétition</b><select id="drp"><option value="0">Non</option><option value="1">Tout</option><option value="2">Une piste</option></select></label>
-<p class="hint">Aléatoire et répétition s'appliquent à l'ouverture de l'appli.</p>
-<div class="presets"><button class="btn" id="rst">RÉINITIALISER LES RÉGLAGES</button></div>`);
+/* ---------- Réglages (le HTML est dans index.html) ---------- */
 const ap = () => {
   SS('dp_set2', ST);
   root.setProperty('--zm', ST.zm);
@@ -48,52 +27,61 @@ $('#dsh').onchange = e => { ST.sh = e.target.checked; ap(); };
 $('#drp').onchange = e => { ST.rp = +e.target.value; ap(); };
 $('#rst').onclick = () => {
   if (!confirm('Remettre tous les réglages à zéro ? (tes morceaux sont conservés)')) return;
-  ['dp_fx', 'dp_theme', 'dp_vm', 'dp_set', 'dp_set2', 'dp_scan', 'dp_vol'].forEach(k => localStorage.removeItem(k));
+  ['dp_fx', 'dp_theme', 'dp_vm', 'dp_set', 'dp_set2', 'dp_scan', 'dp_vol', 'dp_pol', 'dp_sv', 'dp_grid', 'dp_pxcov'].forEach(k => localStorage.removeItem(k));
   location.reload();
 };
 
-/* ---------- Visualiseur : barres / miroir / cercle / onde ---------- */
-let acc = '#b79cff';
-setInterval(() => { acc = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || acc; }, 800);
+/* ---------- Visualiseur pixel 128×40 (blocs de 3 px) : barres / miroir / cercle / onde ---------- */
+const cv = $('#viz'), c = cv.getContext('2d');
+c.imageSmoothingEnabled = false;
+const W = 128, H = 40, BARS = 32, ROWS = 10;
+const level = new Array(BARS).fill(0), peak = new Array(BARS).fill(0), wv = new Uint8Array(128);
+let t = 0, col = ['#00E5FF', '#FF6EC7', '#F2DDFB'];
+const readColors = () => {
+  const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+  col = [g('--cyan') || col[0], g('--accent') || g('--pink') || col[1], g('--moon') || col[2]];
+};
+readColors(); setInterval(readColors, 800);
+const blk = (x, y, k) => { c.fillStyle = col[k]; c.fillRect(Math.round(x), Math.round(y), 3, 3); };
 cv.addEventListener('click', () => { ST.vs = (ST.vs + 1) % 4; $('#vs').value = ST.vs; ap(); });
-const wv = new Uint8Array(128);
-draw = () => {
+
+function draw() {
   requestAnimationFrame(draw); t++;
-  const W = cv.width, H = cv.height, live = analyser && !audio.paused;
-  c.clearRect(0, 0, W, H);
+  const live = analyser && !audio.paused;
+  c.fillStyle = '#080710'; c.fillRect(0, 0, W, H);
   let bass = 0;
   if (live) { analyser.getByteFrequencyData(data); bass = (data[0] + data[1] + data[2] + data[3]) / 1020; }
   root.setProperty('--bass', Math.min(1, bass * ST.sens).toFixed(3));
-  c.fillStyle = c.strokeStyle = acc; c.shadowColor = acc; c.shadowBlur = 12; c.globalAlpha = .9;
-  if (ST.vs === 3) {
+  if (ST.vs === 3) {                                  // onde en escalier
     if (live) analyser.getByteTimeDomainData(wv);
-    c.lineWidth = 3; c.beginPath();
-    for (let x = 0; x < 128; x++) {
-      const v = live ? (wv[x] - 128) / 128 * ST.sens : Math.sin(t / 20 + x / 9) * .08;
-      const px = x / 127 * W, py = H / 2 + v * H * .8;
-      x ? c.lineTo(px, py) : c.moveTo(px, py);
+    for (let x = 0; x < W; x += 3) {
+      const v = live ? (wv[Math.min(127, x)] - 128) / 128 * ST.sens : Math.sin(t / 20 + x / 9) * .1;
+      blk(x, Math.round((H / 2 - 1.5 + v * 17) / 3) * 3, 0);
     }
-    c.stroke();
-  } else {
-    for (let i = 0; i < BARS; i++) {
-      const tg = live ? Math.min(1, Math.pow(data[i] / 255, 1.4) * 1.5 * ST.sens) : (Math.sin(t / 40 + i / 2.5) + 1) / 16;
-      level[i] += (tg - level[i]) * .3;
-      if (ST.vs === 2) {
-        const a = i / BARS * Math.PI * 2 - Math.PI / 2, r0 = H * .2, r1 = r0 + 4 + level[i] * H * .3;
-        c.lineWidth = 4; c.beginPath();
-        c.moveTo(W / 2 + Math.cos(a) * r0, H / 2 + Math.sin(a) * r0);
-        c.lineTo(W / 2 + Math.cos(a) * r1, H / 2 + Math.sin(a) * r1);
-        c.stroke();
-      } else {
-        const w = W / BARS, h = Math.max(4, level[i] * H * (ST.vs ? .5 : 1)), y = ST.vs ? H / 2 - h : H - h;
-        c.beginPath();
-        c.roundRect ? c.roundRect(i * w + 2, y, w - 4, ST.vs ? h * 2 : h, 3) : c.rect(i * w + 2, y, w - 4, ST.vs ? h * 2 : h);
-        c.fill();
+    return;
+  }
+  for (let i = 0; i < BARS; i++) {
+    const tg = live ? Math.min(1, Math.pow(data[i] / 255, 1.4) * 1.5 * ST.sens) : (Math.sin(t / 40 + i / 2.5) + 1) / 16;
+    level[i] += (tg - level[i]) * .3;
+    peak[i] = Math.max(level[i], peak[i] - .012);
+    const h = Math.max(1, Math.round(level[i] * ROWS));
+    if (ST.vs === 2) {                                // anneau pixel
+      const a = i / BARS * Math.PI * 2 - Math.PI / 2, r0 = 6;
+      for (let j = 0; j < Math.max(1, Math.round(level[i] * 5)); j++) {
+        const r = r0 + j * 3;
+        blk(W / 2 + Math.cos(a) * r * 1.6 - 1.5, H / 2 + Math.sin(a) * r - 1.5, j > 3 ? 2 : j > 1 ? 1 : 0);
       }
+    } else if (ST.vs === 1) {                         // miroir
+      const m = Math.max(1, Math.round(h / 2));
+      for (let j = 0; j < m; j++) { const k = j > 3 ? 2 : j > 1 ? 1 : 0; blk(i * 4, 19 - j * 4 - 1, k); blk(i * 4, 19 + j * 4 + 2, k); }
+    } else {                                          // barres d'égaliseur segmentées
+      for (let j = 0; j < h; j++) blk(i * 4, H - (j + 1) * 4, j > 7 ? 2 : j > 4 ? 1 : 0);
+      const pk = Math.round(peak[i] * ROWS);
+      if (pk > h) blk(i * 4, H - (pk + 1) * 4, 2);
     }
   }
-  c.globalAlpha = 1; c.shadowBlur = 0;
-};
+}
+draw();
 
 /* ---------- Fondu début / fin de morceau ---------- */
 let fg = null;
@@ -113,44 +101,24 @@ audio.addEventListener('timeupdate', () => {
   fg.gain.setTargetAtTime(rem < ST.fade ? Math.max(0, rem / ST.fade) : 1, actx.currentTime, .1);
 });
 
-/* ---------- Vue « File d'attente » ---------- */
-const addQ = () => {
-  const s = $('#vsel');
-  if ([...s.options].some(o => o.value === 'queue')) return;
-  const cur = s.value; s.add(new Option("File d'attente", 'queue')); s.value = cur;
-};
-new MutationObserver(addQ).observe($('#vsel'), { childList: true });
-addQ();
-const _rl = renderList;
-renderList = () => {
-  if ($('#vsel').value !== 'queue') return _rl();
-  const l = $('#list'), Q = window.DP && window.DP.Q ? window.DP.Q() : null;
-  l.classList.remove('gridv'); l.innerHTML = '';
-  if (!Q || !Q.length) { l.innerHTML = '<div class="empty">File vide : utilise ⋯ › « Ajouter à la file »</div>'; return; }
-  Q.forEach((id, k) => {
-    const t = tracks.find(x => x.id === id);
-    if (!t) return;
-    const d = document.createElement('div');
-    d.className = 'track';
-    d.innerHTML = '<span class="n"></span><span class="t"></span><span class="m">▲</span><span class="m">▼</span><span class="m">✕</span>';
-    d.children[0].textContent = String(k + 1).padStart(2, '0');
-    d.children[1].textContent = t.name;
-    const mv = j => { if (j < 0 || j >= Q.length) return; [Q[k], Q[j]] = [Q[j], Q[k]]; renderList(); };
-    d.children[2].onclick = () => mv(k - 1);
-    d.children[3].onclick = () => mv(k + 1);
-    d.children[4].onclick = () => { Q.splice(k, 1); renderList(); };
-    l.appendChild(d);
-  });
-};
-
-/* ---------- Clavier : lignes de la liste ---------- */
-new MutationObserver(() => document.querySelectorAll('#list .track').forEach(r => {
+/* ---------- Clavier : lignes et boutons de la liste ---------- */
+new MutationObserver(() => document.querySelectorAll('#list .track, #homeq .track').forEach(r => {
   if (!r.hasAttribute('role')) { r.setAttribute('role', 'button'); r.tabIndex = 0; }
-})).observe($('#list'), { childList: true });
-$('#list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('track')) e.target.click(); });
+})).observe(document.body, { childList: true, subtree: true });
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.track, .track .h, .track .m')) { e.preventDefault(); e.target.click(); }
+});
 
 /* ---------- Démarrage ---------- */
 ap();
 if (ST.sh) $('#shuffle').click();
 for (let i = 0; i < ST.rp; i++) $('#repeat').click();
+const sv = $('#sv');
+sv.value = localStorage.getItem('dp_sv') || 'last';
+sv.onchange = () => { try { localStorage.setItem('dp_sv', sv.value); } catch {} };
+if (sv.value !== 'last') {
+  const vol = $('#vol');
+  vol.value = sv.value;
+  vol.dispatchEvent(new Event('input'));
+}
 })();

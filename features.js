@@ -1,29 +1,12 @@
-/* features.js — dream.player : fonctions en plus (se charge après script.js) */
+/* features.js — dream.player : stockage (IndexedDB), tags ID3, effets audio, thèmes, minuteur (après script.js) */
 (() => {
 const $ = s => document.querySelector(s);
 const LS = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const SS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-/* ---------- CSS en plus ---------- */
-const st = document.createElement('style');
-st.textContent = `
-.noscan::after{display:none}
-.cover{display:none;width:72px;height:72px;margin:10px auto 0;border:3px solid var(--white);object-fit:cover}
-.srch{display:flex;gap:6px;margin-bottom:8px}
-.srch input{flex:1;min-width:0;background:var(--dark);color:var(--white);border:3px solid var(--white);padding:8px;font:20px 'VT323',monospace;outline:none;border-radius:0}
-.srch .btn{height:auto;min-width:44px;font-size:12px}
-.h{font-size:16px;padding:0 4px;color:var(--pink)}
-.track.cur .h{color:var(--dark)}
-.fx h3{font:9px 'Press Start 2P',monospace;color:var(--yellow);margin:16px 0 8px}
-.fx label{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:19px}
-.fx label b{width:92px;font-weight:400;flex:none}
-.fx label i{width:48px;font-style:normal;text-align:right;color:var(--cyan);flex:none}
-.fx input[type=range]{flex:1;min-width:0;width:auto}
-.fx .presets{margin-bottom:4px}`;
-document.head.appendChild(st);
-
 /* ---------- Base de données (IndexedDB) ---------- */
 const DB = new Promise((ok, ko) => {
+  if (!window.indexedDB) return ko(new Error('IndexedDB indisponible'));
   const r = indexedDB.open('dreamplayer', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('t', { keyPath: 'id' });
   r.onsuccess = () => ok(r.result);
@@ -34,7 +17,7 @@ const db = (m, f) => DB.then(d => new Promise((ok, ko) => {
   q.onsuccess = () => ok(q.result);
   q.onerror = () => ko(q.error);
 }));
-const put = t => db('readwrite', s => s.put({ id: t.id, file: t.blob, fb: t.fb, fav: !!t.fav, added: t.added }));
+const put = t => db('readwrite', s => s.put({ id: t.id, file: t.blob, fb: t.fb, fav: !!t.fav, added: t.added })).catch(e => console.warn('Stockage :', e));
 
 /* ---------- Tags ID3 (titre, artiste, pochette) ---------- */
 async function id3(f) {
@@ -79,13 +62,11 @@ addFiles = async files => {
   if (idx === -1 && tracks.length) load(0, false);
 };
 
-/* ---------- Pochette + suppression ---------- */
-$('#now').insertAdjacentHTML('beforebegin', '<img id="cover" class="cover" alt="">');
+/* ---------- Contrôles système (pochette) + suppression en base ---------- */
 const _load = load;
 load = (i, a) => {
   _load(i, a);
-  const t = tracks[i], im = $('#cover');
-  if (t.cover) { im.src = t.cover; im.style.display = 'block'; } else im.style.display = 'none';
+  const t = tracks[i];
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({
     title: t.title, artist: t.artist || 'dream.player', artwork: t.cover ? [{ src: t.cover }] : []
   });
@@ -94,31 +75,7 @@ const _rm = removeTrack;
 removeTrack = i => {
   const t = tracks[i];
   _rm(i);
-  if (t && t.id) db('readwrite', s => s.delete(t.id));
-  if (idx === -1) $('#cover').style.display = 'none';
-};
-
-/* ---------- Recherche + favoris ---------- */
-$('#list').insertAdjacentHTML('beforebegin',
-  '<div class="srch"><input id="q" type="text" placeholder="Rechercher..." autocomplete="off"><button class="btn" id="favf" aria-label="Favoris">♥</button></div>');
-let q = '', fo = false;
-$('#q').oninput = e => { q = e.target.value.toLowerCase(); renderList(); };
-$('#favf').onclick = e => { fo = !fo; e.currentTarget.classList.toggle('on', fo); renderList(); };
-renderList = () => {
-  const l = $('#list');
-  const rows = tracks.map((t, i) => [t, i]).filter(([t]) => (!fo || t.fav) && t.name.toLowerCase().includes(q));
-  if (!rows.length) { l.innerHTML = '<div class="empty">' + (tracks.length ? 'Aucun résultat' : 'Playlist vide...') + '</div>'; return; }
-  l.innerHTML = '';
-  rows.forEach(([t, i]) => {
-    const d = document.createElement('div');
-    d.className = 'track' + (i === idx ? ' cur' : '');
-    d.innerHTML = `<span class="n">${String(i + 1).padStart(2, '0')}</span><span class="t"></span><span class="h">${t.fav ? '♥' : '♡'}</span><span class="x">X</span>`;
-    d.querySelector('.t').textContent = t.name;
-    d.onclick = () => load(i, true);
-    d.querySelector('.h').onclick = e => { e.stopPropagation(); t.fav = !t.fav; put(t); renderList(); };
-    d.querySelector('.x').onclick = e => { e.stopPropagation(); removeTrack(i); };
-    l.appendChild(d);
-  });
+  if (t && t.id) db('readwrite', s => s.delete(t.id)).catch(() => {});
 };
 
 /* ---------- Effets audio : vitesse, réverb, égaliseur ---------- */
@@ -165,120 +122,70 @@ initAudioCtx = () => {
 };
 /* volume via Web Audio (le volume natif ne marche pas sur iPad) */
 $('#vol').addEventListener('input', e => { audio.volume = 1; if (fx.master) fx.master.gain.value = +e.target.value; });
+window.DPfx = fx;   // lu par settings.js (fondu) et le minuteur
 
-/* ---------- Thèmes ---------- */
-let C = ['#7ff5ff', '#ff8fd8', '#fff29a'];
-const TH = {
-  dream:  ['#1a1033', '#3b1f6b', '#ff9ad5', '#ff8fd8', '#7ff5ff', '#fff29a', '#241447'],
-  vapor:  ['#0b1033', '#1d3b8f', '#7ff5ff', '#c28bff', '#7ff5ff', '#ff8fd8', '#14204d'],
-  ember:  ['#1f0a0a', '#6b1f1f', '#ffb36b', '#ff7a59', '#ffd36b', '#fff29a', '#3a1414'],
-  matrix: ['#02130a', '#0b4a24', '#7dffb0', '#5dff8a', '#b6ffd0', '#e6ff9a', '#06260f']
-};
+/* ---------- Thèmes (variables CSS dans dream.css : html[data-theme]) ---------- */
+const themeBtns = document.querySelectorAll('[data-t]');
 const theme = n => {
-  const T = TH[n] || TH.dream, r = document.documentElement.style;
-  ['bg1', 'bg2', 'bg3', 'pink', 'cyan', 'yellow', 'panel'].forEach((k, i) => r.setProperty('--' + k, T[i]));
-  document.body.style.background = `linear-gradient(180deg,${T[0]} 0%,${T[1]} 60%,${T[2]} 100%) fixed`;
-  C = [T[4], T[3], T[5]];
+  if (!['dream', 'vapor', 'ember', 'matrix'].includes(n)) n = 'dream';
+  document.documentElement.dataset.theme = n;
+  themeBtns.forEach(b => { b.classList.toggle('on', b.dataset.t === n); b.setAttribute('aria-pressed', b.dataset.t === n); });
   SS('dp_theme', n);
 };
 
-/* ---------- Onglet FX ---------- */
-$('.tabs').insertAdjacentHTML('beforeend', '<button class="tab" id="tabfx">FX</button>');
-$('.footer').insertAdjacentHTML('beforebegin', '<section class="view fx" id="view-fx"></section>');
-const sl = (id, lab, min, max, step) => `<label><b>${lab}</b><input type="range" id="${id}" min="${min}" max="${max}" step="${step}"><i id="${id}v"></i></label>`;
-const bt = (k, arr) => arr.map(([v, n]) => `<button class="btn" data-${k}="${v}">${n}</button>`).join('');
-$('#view-fx').innerHTML = `
-<h3>AMBIANCE</h3>
-<div class="presets">${bt('p', [[0, 'NORMAL'], [1, 'SLOWED'], [2, 'SPED UP'], [3, 'BASS'], [4, 'VOCAL']])}</div>
-${sl('sp', 'Vitesse', .5, 1.5, .01)}${sl('rv', 'Réverb', 0, 1, .01)}
-<label><b>Hauteur fixe</b><input type="checkbox" id="kp"></label>
-<h3>ÉGALISEUR</h3>${sl('lo', 'Graves', -12, 12, 1)}${sl('mi', 'Médiums', -12, 12, 1)}${sl('hi', 'Aigus', -12, 12, 1)}
-<h3>MINUTEUR</h3>
-<div class="presets">${bt('s', [[15, '15 MIN'], [30, '30 MIN'], [60, '60 MIN'], [0, 'OFF']])}</div>
-<p class="hint" id="slst">Minuteur : off</p>
-<h3>THÈME</h3>
-<div class="presets">${bt('t', [['dream', 'DREAM'], ['vapor', 'VAPOR'], ['ember', 'EMBER'], ['matrix', 'MATRIX']])}</div>
-<h3>AFFICHAGE</h3>
-<label><b>Scanlines</b><input type="checkbox" id="scan"></label>
-<p class="hint">Touche le visualiseur pour changer de mode.</p>`;
-
-$('#tabfx').onclick = e => {
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
-  e.currentTarget.classList.add('active');
-  $('#view-fx').classList.add('active');
-};
+/* ---------- Réglages audio / affichage (le HTML est dans index.html) ---------- */
 const ids = ['sp', 'rv', 'lo', 'mi', 'hi'];
+const fillp = e => e.style.setProperty('--p', ((e.value - e.min) / (e.max - e.min) * 100) + '%');
+const presetBtns = document.querySelectorAll('[data-p]');
 const sync = () => {
   ids.forEach(k => {
     $('#' + k).value = S[k];
     $('#' + k + 'v').textContent = k === 'sp' ? S[k].toFixed(2) + 'x' : k === 'rv' ? Math.round(S[k] * 100) + '%' : S[k] + 'dB';
+    fillp($('#' + k));
   });
   $('#kp').checked = S.kp;
+  presetBtns.forEach((b, i) => { const on = ids.every(k => Math.abs(S[k] - P[i][k]) < .005); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
 };
 ids.forEach(k => $('#' + k).oninput = e => { S[k] = +e.target.value; sync(); apply(); });
 $('#kp').onchange = e => { S.kp = e.target.checked; apply(); };
-document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { Object.assign(S, P[b.dataset.p]); sync(); apply(); });
-document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => theme(b.dataset.t));
+presetBtns.forEach(b => b.onclick = () => { Object.assign(S, P[b.dataset.p]); sync(); apply(); });
+themeBtns.forEach(b => b.onclick = () => theme(b.dataset.t));
 $('#scan').checked = LS('dp_scan', true);
 document.body.classList.toggle('noscan', !$('#scan').checked);
 $('#scan').onchange = e => { SS('dp_scan', e.target.checked); document.body.classList.toggle('noscan', !e.target.checked); };
 
 /* ---------- Minuteur de sommeil ---------- */
 let tm;
+const sleepBtns = document.querySelectorAll('[data-s]');
 const sleep = m => {
   clearTimeout(tm);
   $('#slst').textContent = m ? 'Minuteur : ' + m + ' min' : 'Minuteur : off';
+  sleepBtns.forEach(b => { const on = +b.dataset.s === m; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
   if (!m) return;
   tm = setTimeout(() => {
     const g = fx.master;
     if (g) { g.gain.setValueAtTime(g.gain.value, actx.currentTime); g.gain.linearRampToValueAtTime(0, actx.currentTime + 6); }
-    setTimeout(() => { audio.pause(); if (g) g.gain.value = +$('#vol').value; $('#slst').textContent = 'Minuteur : off'; }, 6200);
+    setTimeout(() => {
+      audio.pause(); if (g) g.gain.value = +$('#vol').value;
+      $('#slst').textContent = 'Minuteur : off';
+      sleepBtns.forEach(b => { b.classList.remove('on'); b.setAttribute('aria-pressed', false); });
+    }, 6200);
   }, m * 60000);
 };
-document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => sleep(+b.dataset.s));
+sleepBtns.forEach(b => b.onclick = () => sleep(+b.dataset.s));
 
-/* ---------- Visualiseur : 3 modes (barres / onde / miroir) ---------- */
-let vm = LS('dp_vm', 0);
-const wv = new Uint8Array(128);
-cv.addEventListener('click', () => { vm = (vm + 1) % 3; SS('dp_vm', vm); });
-draw = () => {
-  requestAnimationFrame(draw); t++;
-  c.fillStyle = '#0a0618'; c.fillRect(0, 0, 128, 48);
-  const live = analyser && !audio.paused;
-  if (vm === 1) {
-    if (live) analyser.getByteTimeDomainData(wv);
-    c.fillStyle = C[0];
-    for (let x = 0; x < 128; x += 2) {
-      const v = live ? (wv[x] - 128) / 128 : Math.sin(t / 20 + x / 9) * .1;
-      c.fillRect(x, 22 + Math.round(v * 22), 3, 3);
-    }
-    return;
-  }
-  if (live) analyser.getByteFrequencyData(data);
-  for (let i = 0; i < BARS; i++) {
-    const tg = live ? Math.min(1, Math.pow(data[i] / 255, 1.4) * 1.5) : (Math.sin(t / 40 + i / 2.5) + 1) / 14;
-    level[i] += (tg - level[i]) * .35;
-    const h = Math.max(1, Math.round(level[i] * (vm ? ROWS / 2 : ROWS)));
-    for (let j = 0; j < h; j++) {
-      const k = vm === 2 ? j * 2 : j;
-      c.fillStyle = C[k > 8 ? 2 : k > 4 ? 1 : 0];
-      if (vm === 2) { c.fillRect(i * 4, 22 - j * 4, 3, 3); c.fillRect(i * 4, 23 + j * 4, 3, 3); }
-      else c.fillRect(i * 4, 44 - j * 4, 3, 3);
-    }
-  }
-};
-
-/* ---------- Démarrage ---------- */
+/* ---------- Démarrage : réglages puis bibliothèque (après chargement de tous les scripts) ---------- */
 theme(LS('dp_theme', 'dream'));
 sync(); apply();
-(async () => {
+$('#list').innerHTML = loadingBox('chargement de la bibliothèque');
+document.addEventListener('DOMContentLoaded', async () => {
   try {
     const recs = await db('readonly', s => s.getAll());
     recs.sort((a, b) => a.added - b.added);
     for (const r of recs) tracks.push(await mk(r.file, { id: r.id, fb: r.fb, fav: r.fav, added: r.added }));
     renderList();
     if (idx === -1 && tracks.length) load(0, false);
-  } catch (e) { console.warn(e); }
-})();
+  } catch (e) { console.warn(e); renderList(); }
+  document.dispatchEvent(new Event('dp:ready'));     // les autres modules restaurent leur état ici
+});
 })();
