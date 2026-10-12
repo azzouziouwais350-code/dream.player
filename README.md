@@ -109,7 +109,7 @@ Lorsque le manifeste et le service worker sont correctement configurés, dream.p
 
 Le fonctionnement hors ligne dépend des ressources mises en cache et des fonctionnalités qui peuvent fonctionner sans connexion.
 
-## 🎧 Intégration Spotify
+## 🎧 Intégration Spotify ( Beta )
 
 Les fonctionnalités liées à Spotify peuvent nécessiter une authentification, une configuration supplémentaire et le respect des règles de la plateforme.
 
