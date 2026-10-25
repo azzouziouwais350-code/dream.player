@@ -1,0 +1,44 @@
+name: Déploiement GitHub Pages
+
+on:
+  push:
+    branches: [Main, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # Vérifie la syntaxe de chaque script et que le service worker ne référence que des fichiers existants
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Vérifications
+        run: |
+          for f in *.js; do node --check "$f"; done
+          node -e "
+            const fs=require('fs');
+            const src=fs.readFileSync('sw.js','utf8');
+            const list=[...src.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
+            const missing=list.filter(f=>!fs.existsSync(f));
+            if(missing.length){console.error('Manquants dans sw.js:',missing);process.exit(1)}
+            console.log(list.length+' fichiers du cache présents');"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
